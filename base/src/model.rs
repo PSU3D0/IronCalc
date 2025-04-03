@@ -822,7 +822,8 @@ impl Model {
         }
     }
 
-    pub(crate) fn get_sheet_index_by_name(&self, name: &str) -> Option<u32> {
+    /// Returns the index of the sheet with the given name
+    pub fn get_sheet_index_by_name(&self, name: &str) -> Option<u32> {
         let worksheets = &self.workbook.worksheets;
         for (index, worksheet) in worksheets.iter().enumerate() {
             if worksheet.get_name().to_uppercase() == name.to_uppercase() {

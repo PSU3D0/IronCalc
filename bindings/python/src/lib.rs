@@ -326,6 +326,12 @@ impl PyModel {
             .map_err(|e| WorkbookError::new_err(e.to_string()))
     }
 
+    pub fn get_sheet_index_by_name(&self, sheet_name: &str) -> PyResult<Option<i32>> {
+        Ok(self.model
+            .get_sheet_index_by_name(sheet_name)
+            .map(|index| index as i32))
+    }
+
     #[allow(clippy::panic)]
     pub fn test_panic(&self) -> PyResult<()> {
         panic!("This function panics for testing panic handling");

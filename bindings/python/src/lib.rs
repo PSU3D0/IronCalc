@@ -105,6 +105,15 @@ impl PyModel {
             .map_err(|e| WorkbookError::new_err(e.to_string()))
     }
 
+    pub fn clear_range(&mut self, sheet: u32, start_row: i32, start_column: i32, end_row: i32, end_column: i32) -> PyResult<()> {
+        for row in start_row..=end_row {
+            for column in start_column..=end_column {
+                self.clear_cell_contents(sheet, row, column)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Set multiple inputs at once using a single GIL acquisition
     /// 
     /// Takes an iterable of (sheet, row, column, value) tuples and applies them as a batch.

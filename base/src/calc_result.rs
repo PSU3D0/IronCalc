@@ -9,7 +9,7 @@ pub struct Range {
 }
 
 #[derive(Clone)]
-pub(crate) enum CalcResult {
+pub enum CalcResult {
     String(String),
     Number(f64),
     Boolean(bool),

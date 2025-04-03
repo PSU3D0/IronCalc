@@ -772,7 +772,8 @@ impl Model {
         self.workbook.worksheet(sheet)?.is_empty_cell(row, column)
     }
 
-    pub(crate) fn evaluate_cell(&mut self, cell_reference: CellReferenceIndex) -> CalcResult {
+    /// Evaluate the cell
+    pub fn evaluate_cell(&mut self, cell_reference: CellReferenceIndex) -> CalcResult {
         let row_data = match self.workbook.worksheets[cell_reference.sheet as usize]
             .sheet_data
             .get(&cell_reference.row)

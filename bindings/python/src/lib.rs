@@ -105,6 +105,77 @@ impl PyModel {
             .map_err(|e| WorkbookError::new_err(e.to_string()))
     }
 
+    /// Set multiple inputs at once using a single GIL acquisition
+    /// 
+    /// Takes an iterable of (sheet, row, column, value) tuples and applies them as a batch.
+    /// This is much more efficient than calling set_user_input repeatedly for large datasets.
+    /// 
+    /// Example:
+    ///     model.set_user_inputs_batch([
+    ///         (0, 0, 0, "Header"),
+    ///         (0, 1, 0, 100),
+    ///         (0, 2, 0, 200),
+    ///     ])
+    #[pyo3(signature = (inputs, reevaluate=true))]
+    pub fn set_user_inputs_batch(
+        &mut self,
+        inputs: Vec<(u32, i32, i32, Py<PyAny>)>,
+        reevaluate: bool,
+    ) -> PyResult<()> {
+        Python::with_gil(|py| {
+            // Process each item in the iterator
+            for tuple in inputs.iter() {
+                let sheet: u32 = tuple.0;
+                let row: i32 = tuple.1;
+                let column: i32 = tuple.2;
+                let value = tuple.3.clone_ref(py);
+                
+                // Logic similar to set_user_input but without acquiring the GIL each time
+                if let Ok(string_val) = value.extract::<String>(py) {
+                    if string_val.starts_with('=') || string_val.starts_with('\'') {
+                        // Handle formulas or text that starts with '
+                        self.model
+                            .set_user_input(sheet, row, column, string_val)
+                            .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+                    } else {
+                        // Normal text
+                        self.model
+                            .update_cell_with_text(sheet, row, column, &string_val)
+                            .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+                    }
+                } else if let Ok(bool_val) = value.extract::<bool>(py) {
+                    // Handle boolean values
+                    self.model
+                        .update_cell_with_bool(sheet, row, column, bool_val)
+                        .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+                } else if let Ok(float_val) = value.extract::<f64>(py) {
+                    // Handle floating point numbers
+                    self.model
+                        .update_cell_with_number(sheet, row, column, float_val)
+                        .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+                } else if let Ok(int_val) = value.extract::<i64>(py) {
+                    // Handle integers
+                    self.model
+                        .update_cell_with_number(sheet, row, column, int_val as f64)
+                        .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+                } else {
+                    // For any other type, convert to string and use set_user_input
+                    let value_str = value.call_method0(py, "__str__")?.extract::<String>(py)?;
+                    self.model
+                        .set_user_input(sheet, row, column, value_str)
+                        .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+                }
+            }
+            
+            // Re-evaluate the model if requested
+            if reevaluate {
+                self.evaluate();
+            }
+            
+            Ok(())
+        })
+    }
+
     // Get values
 
     /// Get raw value

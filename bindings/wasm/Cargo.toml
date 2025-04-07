@@ -1,8 +1,8 @@
 [package]
-name = "wasm"
+name = "ironcalc-wasm-interim"
 version = "0.5.0"
 authors = ["Nicolas Hatcher <nicolas@theuniverse.today>"]
-description = "IronCalc Web bindings"
+description = "IronCalc Web bindings. Interim until the maintainer updates the package"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/ironcalc/ironcalc"
 edition = "2021"

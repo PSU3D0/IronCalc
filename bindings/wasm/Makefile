@@ -7,7 +7,7 @@ ifeq ($(PYTHON),)
 endif
 
 all:
-	wasm-pack build --target web --scope ironcalc --release
+	wasm-pack build --target web --release
 	cp README.pkg.md pkg/README.md
 	tsc types.ts --target esnext --module esnext
 	$(PYTHON) fix_types.py

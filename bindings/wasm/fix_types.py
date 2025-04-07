@@ -227,14 +227,14 @@ def fix_types(text):
 
 
 if __name__ == "__main__":
-    types_file = "pkg/wasm.d.ts"
+    types_file = "pkg/ironcalc_wasm_interim.d.ts"
     with open(types_file) as f:
         text = f.read()
     text = fix_types(text)
     with open(types_file, "wb") as f:
         f.write(bytes(text, "utf8"))
 
-    js_file = "pkg/wasm.js"
+    js_file = "pkg/ironcalc_wasm_interim.js"
     with open("types.js") as f:
         text_js = f.read()
     with open(js_file) as f:

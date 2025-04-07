@@ -1,20 +1,24 @@
+use chrono::{NaiveDate, NaiveDateTime};
+#[cfg(feature = "polars")]
+use polars::PyDataFrame;
 use pyo3::exceptions::PyException;
 use pyo3::types::PyList;
-use pyo3::{create_exception, prelude::*, wrap_pyfunction};
 use pyo3::IntoPyObjectExt;
+use pyo3::{create_exception, prelude::*, wrap_pyfunction};
 
-use types::{PySheetProperty, PyStyle};
+use types::{PySheetProperty, PyStyle, RangeInjectionManifestItem};
 use xlsx::base::calc_result::CalcResult;
-use xlsx::base::expressions::types::CellReferenceIndex;
 use xlsx::base::expressions::parser::ArrayNode;
+use xlsx::base::expressions::types::CellReferenceIndex;
 use xlsx::base::types::Style;
 use xlsx::base::Model;
 
 use xlsx::export::{save_to_icalc, save_to_xlsx};
 use xlsx::import;
 
+#[cfg(feature = "polars")]
+mod polars;
 mod types;
-
 use crate::types::PyCellType;
 
 create_exception!(_ironcalc, WorkbookError, PyException);
@@ -83,6 +87,26 @@ impl PyModel {
                 self.model
                     .update_cell_with_number(sheet, row, column, int_val as f64)
                     .map_err(|e| WorkbookError::new_err(e.to_string()))
+            } else if let Ok(date_val) = value.extract::<NaiveDate>(py) {
+                // Handle dates
+                self.model
+                    .update_cell_with_number(
+                        sheet,
+                        row,
+                        column,
+                        naivedate_to_excel_timestamp(date_val),
+                    )
+                    .map_err(|e| WorkbookError::new_err(e.to_string()))
+            } else if let Ok(date_time_val) = value.extract::<NaiveDateTime>(py) {
+                // Handle date times
+                self.model
+                    .update_cell_with_number(
+                        sheet,
+                        row,
+                        column,
+                        naivedatetime_to_excel_timestamp(date_time_val),
+                    )
+                    .map_err(|e| WorkbookError::new_err(e.to_string()))
             } else {
                 // For any other type, convert to string and use set_user_input
                 let value_str = value.call_method0(py, "__str__")?.extract::<String>(py)?;
@@ -105,7 +129,14 @@ impl PyModel {
             .map_err(|e| WorkbookError::new_err(e.to_string()))
     }
 
-    pub fn clear_range(&mut self, sheet: u32, start_row: i32, start_column: i32, end_row: i32, end_column: i32) -> PyResult<()> {
+    pub fn clear_range(
+        &mut self,
+        sheet: u32,
+        start_row: i32,
+        start_column: i32,
+        end_row: i32,
+        end_column: i32,
+    ) -> PyResult<()> {
         for row in start_row..=end_row {
             for column in start_column..=end_column {
                 self.clear_cell_contents(sheet, row, column)?;
@@ -115,10 +146,10 @@ impl PyModel {
     }
 
     /// Set multiple inputs at once using a single GIL acquisition
-    /// 
+    ///
     /// Takes an iterable of (sheet, row, column, value) tuples and applies them as a batch.
     /// This is much more efficient than calling set_user_input repeatedly for large datasets.
-    /// 
+    ///
     /// Example:
     ///     model.set_user_inputs_batch([
     ///         (0, 0, 0, "Header"),
@@ -138,7 +169,7 @@ impl PyModel {
                 let row: i32 = tuple.1;
                 let column: i32 = tuple.2;
                 let value = tuple.3.clone_ref(py);
-                
+
                 // Logic similar to set_user_input but without acquiring the GIL each time
                 if let Ok(string_val) = value.extract::<String>(py) {
                     if string_val.starts_with('=') || string_val.starts_with('\'') {
@@ -167,6 +198,26 @@ impl PyModel {
                     self.model
                         .update_cell_with_number(sheet, row, column, int_val as f64)
                         .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+                } else if let Ok(date_val) = value.extract::<NaiveDate>(py) {
+                    // Handle dates
+                    self.model
+                        .update_cell_with_number(
+                            sheet,
+                            row,
+                            column,
+                            naivedate_to_excel_timestamp(date_val),
+                        )
+                        .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+                } else if let Ok(date_time_val) = value.extract::<NaiveDateTime>(py) {
+                    // Handle date times
+                    self.model
+                        .update_cell_with_number(
+                            sheet,
+                            row,
+                            column,
+                            naivedatetime_to_excel_timestamp(date_time_val),
+                        )
+                        .map_err(|e| WorkbookError::new_err(e.to_string()))?;
                 } else {
                     // For any other type, convert to string and use set_user_input
                     let value_str = value.call_method0(py, "__str__")?.extract::<String>(py)?;
@@ -175,17 +226,15 @@ impl PyModel {
                         .map_err(|e| WorkbookError::new_err(e.to_string()))?;
                 }
             }
-            
+
             // Re-evaluate the model if requested
             if reevaluate {
                 self.evaluate();
             }
-            
+
             Ok(())
         })
     }
-
-    // Get values
 
     /// Get raw value
     pub fn get_cell_content(&self, sheet: u32, row: i32, column: i32) -> PyResult<String> {
@@ -233,26 +282,23 @@ impl PyModel {
     }
 
     pub fn evaluate_cell(&mut self, sheet: u32, row: i32, column: i32) -> PyResult<PyObject> {
-        let cell_reference = CellReferenceIndex {
-            sheet,
-            row,
-            column,
-        };
-        
+        let cell_reference = CellReferenceIndex { sheet, row, column };
+
         let result: CalcResult = self.model.evaluate_cell(cell_reference);
-        
+
         Python::with_gil(|py| {
             match result {
                 CalcResult::String(s) => s.into_py_any(py),
                 CalcResult::Number(n) => n.into_py_any(py),
-                CalcResult::Boolean(b) => b.into_py_any(py), 
+                CalcResult::Boolean(b) => b.into_py_any(py),
                 CalcResult::Error { error, message, .. } => {
                     (error.to_string(), message).into_py_any(py)
-                },
-                CalcResult::Range { left, right } => {
-                    ((left.sheet, left.row, left.column), 
-                     (right.sheet, right.row, right.column)).into_py_any(py)
-                },
+                }
+                CalcResult::Range { left, right } => (
+                    (left.sheet, left.row, left.column),
+                    (right.sheet, right.row, right.column),
+                )
+                    .into_py_any(py),
                 CalcResult::EmptyCell => Ok(py.None()),
                 CalcResult::EmptyArg => Ok(py.None()),
                 CalcResult::Array(arr) => {
@@ -262,21 +308,29 @@ impl PyModel {
                         arr.iter().map(|row| {
                             match PyList::new(
                                 py,
-                                row.iter().map(|node| {
-                                    match node {
-                                        ArrayNode::Boolean(b) => b.into_py_any(py).unwrap_or_else(|_| py.None()),
-                                        ArrayNode::Number(n) => n.into_py_any(py).unwrap_or_else(|_| py.None()),
-                                        ArrayNode::String(s) => s.into_py_any(py).unwrap_or_else(|_| py.None()),
-                                        ArrayNode::Error(e) => e.to_string().into_py_any(py).unwrap_or_else(|_| py.None()),
+                                row.iter().map(|node| match node {
+                                    ArrayNode::Boolean(b) => {
+                                        b.into_py_any(py).unwrap_or_else(|_| py.None())
                                     }
-                                })
+                                    ArrayNode::Number(n) => {
+                                        n.into_py_any(py).unwrap_or_else(|_| py.None())
+                                    }
+                                    ArrayNode::String(s) => {
+                                        s.into_py_any(py).unwrap_or_else(|_| py.None())
+                                    }
+                                    ArrayNode::Error(e) => {
+                                        e.to_string().into_py_any(py).unwrap_or_else(|_| py.None())
+                                    }
+                                }),
                             ) {
-                                Ok(row_list) => row_list.into_py_any(py).unwrap_or_else(|_| py.None()),
+                                Ok(row_list) => {
+                                    row_list.into_py_any(py).unwrap_or_else(|_| py.None())
+                                }
                                 Err(_) => py.None(),
                             }
-                        })
+                        }),
                     );
-                    
+
                     match py_list_result {
                         Ok(py_arr) => py_arr.into_py_any(py),
                         Err(e) => Err(e),
@@ -407,7 +461,8 @@ impl PyModel {
     }
 
     pub fn get_sheet_index_by_name(&self, sheet_name: &str) -> PyResult<Option<i32>> {
-        Ok(self.model
+        Ok(self
+            .model
             .get_sheet_index_by_name(sheet_name)
             .map(|index| index as i32))
     }
@@ -416,6 +471,42 @@ impl PyModel {
     pub fn test_panic(&self) -> PyResult<()> {
         panic!("This function panics for testing panic handling");
     }
+}
+
+fn naivedate_to_excel_timestamp(date: NaiveDate) -> f64 {
+    // Excel's epoch starts at December 30, 1899
+    // Using December 30, 1899 instead of January 1, 1900 is intentional
+    // This accounts for Excel's leap year error in 1900
+    let excel_epoch = NaiveDate::from_ymd_opt(1899, 12, 30).unwrap();
+
+    // Calculate days between the dates
+    let days_since_epoch = date.signed_duration_since(excel_epoch).num_days();
+
+    // Convert to f64 (Excel uses floating point for timestamps)
+    days_since_epoch as f64
+}
+
+fn naivedatetime_to_excel_timestamp(dt: NaiveDateTime) -> f64 {
+    // Excel's epoch starts at December 30, 1899
+    let excel_epoch = NaiveDate::from_ymd_opt(1899, 12, 30)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap();
+
+    // Calculate total seconds between the dates
+    let duration_since_epoch = dt.signed_duration_since(excel_epoch);
+
+    // Convert to days (integer part)
+    let days = duration_since_epoch.num_days() as f64;
+
+    // Calculate the remaining seconds for the fractional part
+    let remaining_seconds = duration_since_epoch.num_seconds() % 86400;
+
+    // Convert remaining seconds to fraction of a day
+    let fraction_of_day = remaining_seconds as f64 / 86400.0;
+
+    // Combine the days and fraction of day
+    days + fraction_of_day
 }
 
 // Create methods

@@ -465,3 +465,11 @@ impl From<CellType> for PyCellType {
         }
     }
 }
+
+#[pyclass]
+#[derive(Clone)]
+pub struct RangeInjectionManifestItem {
+    key: String,
+    start_row: i32,
+    start_column: i32,
+}

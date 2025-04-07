@@ -8,13 +8,13 @@ This package contains web bindings for IronCalc. Note that it does not contain t
 In your project
 
 ```
-npm install @ironcalc/wasm
+npm install 
 ```
 
 And then in your TypeScript
 
 ```TypeScript
-import init, { Model } from "@ironcalc/wasm";
+import init, { Model } from "ironcalc-wasm-interim";
 
 await init();
 

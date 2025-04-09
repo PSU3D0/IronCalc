@@ -281,63 +281,30 @@ impl PyModel {
         Ok(style.into())
     }
 
-    pub fn evaluate_cell(&mut self, sheet: u32, row: i32, column: i32) -> PyResult<PyObject> {
+    pub fn evaluate_cell(
+        &mut self,
+        py: Python,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> PyResult<PyObject> {
         let cell_reference = CellReferenceIndex { sheet, row, column };
 
         let result: CalcResult = self.model.evaluate_cell(cell_reference);
+        calc_result_to_py_any(result, py)
+    }
 
-        Python::with_gil(|py| {
-            match result {
-                CalcResult::String(s) => s.into_py_any(py),
-                CalcResult::Number(n) => n.into_py_any(py),
-                CalcResult::Boolean(b) => b.into_py_any(py),
-                CalcResult::Error { error, message, .. } => {
-                    (error.to_string(), message).into_py_any(py)
-                }
-                CalcResult::Range { left, right } => (
-                    (left.sheet, left.row, left.column),
-                    (right.sheet, right.row, right.column),
-                )
-                    .into_py_any(py),
-                CalcResult::EmptyCell => Ok(py.None()),
-                CalcResult::EmptyArg => Ok(py.None()),
-                CalcResult::Array(arr) => {
-                    // Convert to Python list of lists
-                    let py_list_result = PyList::new(
-                        py,
-                        arr.iter().map(|row| {
-                            match PyList::new(
-                                py,
-                                row.iter().map(|node| match node {
-                                    ArrayNode::Boolean(b) => {
-                                        b.into_py_any(py).unwrap_or_else(|_| py.None())
-                                    }
-                                    ArrayNode::Number(n) => {
-                                        n.into_py_any(py).unwrap_or_else(|_| py.None())
-                                    }
-                                    ArrayNode::String(s) => {
-                                        s.into_py_any(py).unwrap_or_else(|_| py.None())
-                                    }
-                                    ArrayNode::Error(e) => {
-                                        e.to_string().into_py_any(py).unwrap_or_else(|_| py.None())
-                                    }
-                                }),
-                            ) {
-                                Ok(row_list) => {
-                                    row_list.into_py_any(py).unwrap_or_else(|_| py.None())
-                                }
-                                Err(_) => py.None(),
-                            }
-                        }),
-                    );
-
-                    match py_list_result {
-                        Ok(py_arr) => py_arr.into_py_any(py),
-                        Err(e) => Err(e),
-                    }
-                }
-            }
-        })
+    pub fn evaluate_cells(
+        &mut self,
+        py: Python,
+        cells: Vec<(u32, i32, i32)>,
+    ) -> PyResult<Vec<PyObject>> {
+        let mut results = Vec::new();
+        for (sheet, row, column) in cells {
+            let result = self.evaluate_cell(py, sheet, row, column)?;
+            results.push(result);
+        }
+        Ok(results)
     }
 
     // column widths, row heights
@@ -470,6 +437,51 @@ impl PyModel {
     #[allow(clippy::panic)]
     pub fn test_panic(&self) -> PyResult<()> {
         panic!("This function panics for testing panic handling");
+    }
+}
+
+fn calc_result_to_py_any(result: CalcResult, py: Python) -> PyResult<PyObject> {
+    match result {
+        CalcResult::String(s) => s.into_py_any(py),
+        CalcResult::Number(n) => n.into_py_any(py),
+        CalcResult::Boolean(b) => b.into_py_any(py),
+        CalcResult::Error { error, message, .. } => (error.to_string(), message).into_py_any(py),
+        CalcResult::Range { left, right } => (
+            (left.sheet, left.row, left.column),
+            (right.sheet, right.row, right.column),
+        )
+            .into_py_any(py),
+        CalcResult::EmptyCell => Ok(py.None()),
+        CalcResult::EmptyArg => Ok(py.None()),
+        CalcResult::Array(arr) => {
+            // Convert to Python list of lists
+            let py_list_result = PyList::new(
+                py,
+                arr.iter().map(|row| {
+                    match PyList::new(
+                        py,
+                        row.iter().map(|node| match node {
+                            ArrayNode::Boolean(b) => {
+                                b.into_py_any(py).unwrap_or_else(|_| py.None())
+                            }
+                            ArrayNode::Number(n) => n.into_py_any(py).unwrap_or_else(|_| py.None()),
+                            ArrayNode::String(s) => s.into_py_any(py).unwrap_or_else(|_| py.None()),
+                            ArrayNode::Error(e) => {
+                                e.to_string().into_py_any(py).unwrap_or_else(|_| py.None())
+                            }
+                        }),
+                    ) {
+                        Ok(row_list) => row_list.into_py_any(py).unwrap_or_else(|_| py.None()),
+                        Err(_) => py.None(),
+                    }
+                }),
+            );
+
+            match py_list_result {
+                Ok(py_arr) => py_arr.into_py_any(py),
+                Err(e) => Err(e),
+            }
+        }
     }
 }
 

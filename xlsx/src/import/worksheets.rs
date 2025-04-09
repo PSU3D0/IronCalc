@@ -543,25 +543,45 @@ fn load_sheet_rels<R: Read + std::io::Seek>(
         .children()
         .collect::<Vec<Node>>();
     for rel in rels {
-        let t = get_attribute(&rel, "Type")?.to_string();
-        if t.ends_with("comments") {
-            let mut target = get_attribute(&rel, "Target")?.to_string();
-            // Target="../comments1.xlsx"
-            target.replace_range(..2, v[0]);
-            comments = load_comments(archive, &target)?;
-        } else if t.ends_with("table") {
-            let mut target = get_attribute(&rel, "Target")?.to_string();
+        // Attempt to get the Type attribute
+        match get_attribute(&rel, "Type") {
+            Ok(t) => { // Attribute found
+                if t.ends_with("comments") {
+                    let mut target = get_attribute(&rel, "Target")?.to_string();
+                    // Target="../comments1.xlsx"
+                    target.replace_range(..2, v[0]);
+                    comments = load_comments(archive, &target)?;
+                } else if t.ends_with("table") {
+                    let mut target = get_attribute(&rel, "Target")?.to_string();
 
-            let path = if let Some(p) = target.strip_prefix('/') {
-                p.to_string()
-            } else {
-                // Target="../table1.xlsx"
-                target.replace_range(..2, v[0]);
-                target
-            };
+                    let path = if let Some(p) = target.strip_prefix('/') {
+                        p.to_string()
+                    } else {
+                        // Target="../table1.xlsx"
+                        target.replace_range(..2, v[0]);
+                        target
+                    };
 
-            let table = load_table(archive, &path, sheet_name)?;
-            tables.insert(table.name.clone(), table);
+                    let table = load_table(archive, &path, sheet_name)?;
+                    tables.insert(table.name.clone(), table);
+                }
+                // Potentially handle other known relationship types here
+            }
+            Err(XlsxError::Xml(error)) => {
+                // Type attribute is missing, log a warning and skip this relationship
+                // Consider replacing println! with a proper logging mechanism if available
+                println!("Warning: Relationship node in '{}' {} Skipping this relationship.", path, error);
+                // Optionally inspect other attributes like 'Target' to provide more context in the warning.
+                if let Ok(target) = get_attribute(&rel, "Target") {
+                     println!("  Target was: {}", target);
+                }
+                // Skip processing this relationship and continue with the next one
+                continue;
+            }
+            Err(e) => { // Some other error occurred while getting the attribute
+                // Propagate the error
+                return Err(e);
+            }
         }
     }
     Ok(comments)

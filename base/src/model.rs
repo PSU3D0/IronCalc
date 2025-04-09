@@ -1561,7 +1561,8 @@ impl Model {
         Ok(formula_index)
     }
 
-    fn set_cell_with_string(
+    /// Set a cell with string directly without guaranteeing any formatting
+    pub fn set_cell_with_string(
         &mut self,
         sheet: u32,
         row: i32,
@@ -1593,7 +1594,8 @@ impl Model {
         Ok(())
     }
 
-    fn set_cell_with_boolean(
+    /// Set a cell with boolean directly without guaranteeing any formatting
+    pub fn set_cell_with_boolean(
         &mut self,
         sheet: u32,
         row: i32,
@@ -1605,8 +1607,8 @@ impl Model {
             .worksheet_mut(sheet)?
             .set_cell_with_boolean(row, column, value, style)
     }
-
-    fn set_cell_with_number(
+    /// Set a cell with number directly without guaranteeing any formatting
+    pub fn set_cell_with_number(
         &mut self,
         sheet: u32,
         row: i32,

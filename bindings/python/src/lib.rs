@@ -69,42 +69,44 @@ impl PyModel {
                 } else {
                     // Normal text
                     self.model
-                        .update_cell_with_text(sheet, row, column, &string_val)
+                        .set_cell_with_string(sheet, row, column, &string_val, 0)
                         .map_err(|e| WorkbookError::new_err(e.to_string()))
                 }
             } else if let Ok(bool_val) = value.extract::<bool>(py) {
                 // Handle boolean values
                 self.model
-                    .update_cell_with_bool(sheet, row, column, bool_val)
+                    .set_cell_with_boolean(sheet, row, column, bool_val, 0)
                     .map_err(|e| WorkbookError::new_err(e.to_string()))
             } else if let Ok(float_val) = value.extract::<f64>(py) {
                 // Handle floating point numbers
                 self.model
-                    .update_cell_with_number(sheet, row, column, float_val)
+                    .set_cell_with_number(sheet, row, column, float_val, 0)
                     .map_err(|e| WorkbookError::new_err(e.to_string()))
             } else if let Ok(int_val) = value.extract::<i64>(py) {
                 // Handle integers
                 self.model
-                    .update_cell_with_number(sheet, row, column, int_val as f64)
+                    .set_cell_with_number(sheet, row, column, int_val as f64, 0)
                     .map_err(|e| WorkbookError::new_err(e.to_string()))
             } else if let Ok(date_val) = value.extract::<NaiveDate>(py) {
                 // Handle dates
                 self.model
-                    .update_cell_with_number(
+                    .set_cell_with_number(
                         sheet,
                         row,
                         column,
                         naivedate_to_excel_timestamp(date_val),
+                        0,
                     )
                     .map_err(|e| WorkbookError::new_err(e.to_string()))
             } else if let Ok(date_time_val) = value.extract::<NaiveDateTime>(py) {
                 // Handle date times
                 self.model
-                    .update_cell_with_number(
+                    .set_cell_with_number(
                         sheet,
                         row,
                         column,
                         naivedatetime_to_excel_timestamp(date_time_val),
+                        0,
                     )
                     .map_err(|e| WorkbookError::new_err(e.to_string()))
             } else {

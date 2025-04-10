@@ -501,4 +501,33 @@ impl Model {
         }
         CalcResult::Number((x + random() * (y - x)).floor())
     }
+
+    pub(crate) fn fn_mod(&mut self, args: &[Node], cell: CellReferenceIndex) -> CalcResult {
+        if args.len() != 2 {
+            return CalcResult::new_args_number_error(cell);
+        }
+        let number = match self.get_number(&args[0], cell) {
+            Ok(f) => f,
+            Err(s) => return s,
+        };
+        let divisor = match self.get_number(&args[1], cell) {
+            Ok(f) => f,
+            Err(s) => return s,
+        };
+
+        if divisor == 0.0 {
+            return CalcResult::new_error(
+                Error::DIV,
+                cell,
+                "Division by zero in MOD".to_string(),
+            );
+        }
+        // Excel's MOD function result has the same sign as the divisor
+        let result = number % divisor;
+        if (result < 0.0 && divisor > 0.0) || (result > 0.0 && divisor < 0.0) {
+            CalcResult::Number(result + divisor)
+        } else {
+            CalcResult::Number(result)
+        }
+    }
 }

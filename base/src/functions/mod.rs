@@ -146,6 +146,7 @@ pub enum Function {
     // Date and time
     Date,
     Day,
+    Datedif,
     Edate,
     Eomonth,
     Month,
@@ -247,10 +248,11 @@ pub enum Function {
     Delta,
     Gestep,
     Subtotal,
+    Mod,
 }
 
 impl Function {
-    pub fn into_iter() -> IntoIter<Function, 195> {
+    pub fn into_iter() -> IntoIter<Function, 197> {
         [
             Function::And,
             Function::False,
@@ -447,6 +449,8 @@ impl Function {
             Function::Delta,
             Function::Gestep,
             Function::Subtotal,
+            Function::Mod,
+            Function::Datedif,
         ]
         .into_iter()
     }
@@ -715,6 +719,8 @@ impl Function {
             "GESTEP" => Some(Function::Gestep),
 
             "SUBTOTAL" => Some(Function::Subtotal),
+            "MOD" => Some(Function::Mod),
+            "DATEDIF" => Some(Function::Datedif),
             _ => None,
         }
     }
@@ -920,6 +926,8 @@ impl fmt::Display for Function {
             Function::Gestep => write!(f, "GESTEP"),
 
             Function::Subtotal => write!(f, "SUBTOTAL"),
+            Function::Mod => write!(f, "MOD"),
+            Function::Datedif => write!(f, "DATEDIF"),
         }
     }
 }
@@ -1160,6 +1168,8 @@ impl Model {
             Function::Gestep => self.fn_gestep(args, cell),
 
             Function::Subtotal => self.fn_subtotal(args, cell),
+            Function::Mod => self.fn_mod(args, cell),
+            Function::Datedif => self.fn_datedif(args, cell),
         }
     }
 }
@@ -1189,6 +1199,7 @@ mod tests {
         let reader = BufReader::new(file);
         let mut start = false;
         let mut list = Vec::new();
+        let mut enum_count = 0;
 
         for line in reader.lines() {
             let text = line.unwrap();
@@ -1210,6 +1221,7 @@ mod tests {
                     continue;
                 }
                 list.push(text.to_owned());
+                enum_count += 1;
             }
         }
         // We make a list with their functions names, but we escape ".": ERROR.TYPE => ERRORTYPE
@@ -1217,13 +1229,45 @@ mod tests {
             .map(|f| format!("{}", f).replace('.', ""))
             .collect::<Vec<_>>();
 
-        let len = iter_list.len();
+        let iter_count = Function::into_iter().count();
 
-        assert_eq!(list.len(), len);
+        // Check counts first
+        assert_eq!(
+            enum_count, iter_count,
+            "Enum count ({}) does not match iterator count ({})",
+            enum_count, iter_count
+        );
+        assert_eq!(
+            list.len(),
+            iter_count,
+            "Collected list count ({}) does not match iterator count ({})",
+            list.len(),
+            iter_count
+        );
+
         // We still need to check there are no duplicates. This will fail if a function in iter_list
         // is included twice and one is missing
-        for function in list {
-            assert!(iter_list.contains(&function.to_uppercase()));
+        for function_name in &list {
+            let upper_case_name = function_name.to_uppercase();
+            assert!(
+                iter_list.contains(&upper_case_name),
+                "Function '{}' from enum not found in iterator list",
+                upper_case_name
+            );
+        }
+
+        // Optional: Check if all items from the iterator are present in the enum list (more robust)
+        let enum_list_upper = list
+            .iter()
+            .map(|s| s.to_uppercase())
+            .collect::<std::collections::HashSet<_>>();
+        for iter_func_name in iter_list {
+            let iter_func_name_no_dot = iter_func_name.replace('.', "");
+            assert!(
+                enum_list_upper.contains(&iter_func_name_no_dot),
+                "Function '{}' from iterator not found in enum list",
+                iter_func_name_no_dot
+            );
         }
     }
 }

@@ -49,7 +49,7 @@ jobs:
           command: build
           target: ${{ steps.target.outputs.target }}
           args: >
-            --profile dist-release
+            --release
             --manifest-path bindings/python/Cargo.toml
             --out dist
             -i python${{ matrix.python-version }}

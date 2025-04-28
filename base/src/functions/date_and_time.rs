@@ -395,8 +395,9 @@ impl Model {
                     // This handles borrowing correctly across month boundaries and leap years.
                     let prev_month_last_day = match end_date.with_day(1) {
                         Some(first_of_month) => (first_of_month - chrono::Duration::days(1)).day(),
-                        None => { // Should not happen for valid dates
-                           return CalcResult::Error {
+                        None => {
+                            // Should not happen for valid dates
+                            return CalcResult::Error {
                                 error: Error::VALUE,
                                 origin: cell,
                                 message: "Internal error calculating MD in DATEDIF".to_string(),
@@ -408,7 +409,7 @@ impl Model {
                 CalcResult::Number(day_diff as f64)
             }
             "YM" => {
-                 // Calculate months ignoring years
+                // Calculate months ignoring years
                 let mut months = end_date.month() as i32 - start_date.month() as i32;
                 // Adjust if the end date's day is earlier than the start date's day
                 if end_date.day() < start_date.day() {
@@ -437,14 +438,17 @@ impl Model {
                     None => {
                         // Handle Feb 29 in non-leap year for target_year
                         if start_date.month() == 2 && start_date.day() == 29 {
-                             match chrono::NaiveDate::from_ymd_opt(target_year, 2, 28) {
-                                 Some(d) => d,
-                                 None => return CalcResult::Error {
+                            match chrono::NaiveDate::from_ymd_opt(target_year, 2, 28) {
+                                Some(d) => d,
+                                None => {
+                                    return CalcResult::Error {
                                         error: Error::VALUE,
                                         origin: cell,
-                                        message: "Internal error adjusting Feb 29 in DATEDIF YD".to_string(),
+                                        message: "Internal error adjusting Feb 29 in DATEDIF YD"
+                                            .to_string(),
                                     }
-                             }
+                                }
+                            }
                         } else {
                             return CalcResult::Error {
                                 error: Error::VALUE,
@@ -455,7 +459,9 @@ impl Model {
                     }
                 };
 
-                let days = end_date.signed_duration_since(start_date_in_target_year).num_days();
+                let days = end_date
+                    .signed_duration_since(start_date_in_target_year)
+                    .num_days();
                 CalcResult::Number(days as f64)
             }
             _ => CalcResult::Error {

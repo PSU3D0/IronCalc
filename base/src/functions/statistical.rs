@@ -355,114 +355,141 @@ impl Model {
         }
 
         let case_count = args_count / 2;
-        // NB: this is a beautiful example of the borrow checker
-        // The order of these two definitions cannot be swapped.
-        let mut criteria = Vec::new();
-        let mut fn_criteria = Vec::new();
-        let ranges = &mut Vec::new();
-        for case_index in 0..case_count {
-            let criterion = self.evaluate_node_in_context(&args[case_index * 2 + 1], cell);
-            criteria.push(criterion);
-            // NB: We cannot do:
-            // fn_criteria.push(build_criteria(&criterion));
-            // because criterion doesn't live long enough
-            let result = self.evaluate_node_in_context(&args[case_index * 2], cell);
-            if result.is_error() {
-                return result;
+
+        // ---------- collect criteria & build per-range matchers ----------
+        let mut criteria: Vec<CalcResult> = Vec::new();
+        let mut fn_criteria: Vec<Box<dyn Fn(&CalcResult) -> bool>> = Vec::new();
+        let mut ranges: Vec<Range> = Vec::new();
+
+        for case_idx in 0..case_count {
+            /* ---------- criterion (right-side argument) ---------- */
+            let crit = self.evaluate_node_in_context(&args[case_idx * 2 + 1], cell);
+            criteria.push(crit);
+
+            /* ---------- range (left-side argument) --------------- */
+            let range_node = &args[case_idx * 2];
+
+            // Bubble-up any error coming from the reference itself
+            let range_value = self.evaluate_node_in_context(range_node, cell);
+            if range_value.is_error() {
+                return range_value;
             }
-            if let CalcResult::Range { left, right } = result {
-                if left.sheet != right.sheet {
+
+            match range_node {
+                // A) Proper A1:B10-style range -------------------------------
+                Node::RangeKind {
+                    sheet_index,
+                    row1,
+                    column1,
+                    row2,
+                    column2,
+                    ..
+                } => ranges.push(Range {
+                    left: CellReferenceIndex {
+                        sheet: *sheet_index,
+                        row: *row1,
+                        column: *column1,
+                    },
+                    right: CellReferenceIndex {
+                        sheet: *sheet_index,
+                        row: *row2,
+                        column: *column2,
+                    },
+                }),
+
+                // B) Single-cell reference – treat as 1 × 1 range ------------
+                Node::ReferenceKind {
+                    sheet_index,
+                    row,
+                    column,
+                    ..
+                } => {
+                    let idx = CellReferenceIndex {
+                        sheet: *sheet_index,
+                        row: *row,
+                        column: *column,
+                    };
+                    ranges.push(Range {
+                        left: idx,
+                        right: idx,
+                    });
+                }
+
+                // C) Anything else is a VALUE error --------------------------
+                _ => {
                     return CalcResult::new_error(
                         Error::VALUE,
                         cell,
-                        "Ranges are in different sheets".to_string(),
+                        "Expected a range".to_string(),
                     );
                 }
-                // TODO test ranges are of the same size as sum_range
-                ranges.push(Range { left, right });
-            } else {
-                return CalcResult::new_error(Error::VALUE, cell, "Expected a range".to_string());
             }
         }
-        for criterion in criteria.iter() {
-            fn_criteria.push(build_criteria(criterion));
+
+        /* build_criteria is your existing helper that turns the literal or
+        regex the user passed (“>10”, “foo*”, etc.) into a closure          */
+        for crit in &criteria {
+            fn_criteria.push(build_criteria(crit));
         }
 
+        // ---------- original counting logic (unchanged) ----------
         let mut total = 0.0;
-        let first_range = &ranges[0];
-        let left_row = first_range.left.row;
-        let left_column = first_range.left.column;
-        let right_row = first_range.right.row;
-        let right_column = first_range.right.column;
+        let first = &ranges[0];
+        let left_row = first.left.row;
+        let left_col = first.left.column;
+        let right_row = first.right.row;
+        let right_col = first.right.column;
 
-        let dimension = match self.workbook.worksheet(first_range.left.sheet) {
-            Ok(s) => s.dimension(),
+        let dimension = match self.workbook.worksheet(first.left.sheet) {
+            Ok(ws) => ws.dimension(),
             Err(_) => {
                 return CalcResult::new_error(
                     Error::ERROR,
                     cell,
-                    format!("Invalid worksheet index: '{}'", first_range.left.sheet),
+                    format!("Invalid worksheet index: '{}'", first.left.sheet),
                 )
             }
         };
         let max_row = dimension.max_row;
-        let max_column = dimension.max_column;
+        let max_col = dimension.max_column;
 
         let open_row = left_row == 1 && right_row == LAST_ROW;
-        let open_column = left_column == 1 && right_column == LAST_COLUMN;
+        let open_col = left_col == 1 && right_col == LAST_COLUMN;
 
-        for row in left_row..right_row + 1 {
+        for row in left_row..=right_row {
             if open_row && row > max_row {
-                // If the row is larger than the max row in the sheet then all cells are empty.
-                // We compute it only once
-                let mut is_true = true;
-                for fn_criterion in fn_criteria.iter() {
-                    if !fn_criterion(&CalcResult::EmptyCell) {
-                        is_true = false;
-                        break;
-                    }
-                }
-                if is_true {
-                    total += ((LAST_ROW - max_row) * (right_column - left_column + 1)) as f64;
+                if fn_criteria.iter().all(|f| f(&CalcResult::EmptyCell)) {
+                    total += ((LAST_ROW - max_row) * (right_col - left_col + 1)) as f64;
                 }
                 break;
             }
-            for column in left_column..right_column + 1 {
-                if open_column && column > max_column {
-                    // If the column is larger than the max column in the sheet then all cells are empty.
-                    // We compute it only once
-                    let mut is_true = true;
-                    for fn_criterion in fn_criteria.iter() {
-                        if !fn_criterion(&CalcResult::EmptyCell) {
-                            is_true = false;
-                            break;
-                        }
-                    }
-                    if is_true {
-                        total += (LAST_COLUMN - max_column) as f64;
+            for col in left_col..=right_col {
+                if open_col && col > max_col {
+                    if fn_criteria.iter().all(|f| f(&CalcResult::EmptyCell)) {
+                        total += (LAST_COLUMN - max_col) as f64;
                     }
                     break;
                 }
-                let mut is_true = true;
-                for case_index in 0..case_count {
-                    // We check if value in range n meets criterion n
-                    let range = &ranges[case_index];
-                    let fn_criterion = &fn_criteria[case_index];
-                    let value = self.evaluate_cell(CellReferenceIndex {
-                        sheet: range.left.sheet,
-                        row: range.left.row + row - first_range.left.row,
-                        column: range.left.column + column - first_range.left.column,
+
+                let mut match_all = true;
+                for (case_idx, fn_crit) in fn_criteria.iter().enumerate() {
+                    let rng = &ranges[case_idx];
+                    let val = self.evaluate_cell(CellReferenceIndex {
+                        sheet: rng.left.sheet,
+                        row: rng.left.row + row - left_row,
+                        column: rng.left.column + col - left_col,
                     });
-                    if !fn_criterion(&value) {
-                        is_true = false;
+                    if !fn_crit(&val) {
+                        match_all = false;
                         break;
                     }
                 }
-                if is_true {
+                if match_all {
                     total += 1.0;
                 }
             }
         }
+
         CalcResult::Number(total)
     }
 

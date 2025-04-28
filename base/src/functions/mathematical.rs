@@ -516,11 +516,7 @@ impl Model {
         };
 
         if divisor == 0.0 {
-            return CalcResult::new_error(
-                Error::DIV,
-                cell,
-                "Division by zero in MOD".to_string(),
-            );
+            return CalcResult::new_error(Error::DIV, cell, "Division by zero in MOD".to_string());
         }
         // Excel's MOD function result has the same sign as the divisor
         let result = number % divisor;

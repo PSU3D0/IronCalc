@@ -347,7 +347,20 @@ impl Model {
         }
     }
 
-    // FIXME: This function shares a lot of code with apply_ifs. Can we merge them?
+    /// COUNTIFS(range1, criteria1, [range2, criteria2]…)
+    ///
+    /// Same engine used by COUNTIF (the single-pair wrapper builds the argument
+    /// list and delegates here).
+    ///
+    /// Excel allows every *range* argument (and every *criteria* argument that is
+    /// itself a reference) to be expressed with **relative** coordinates.  
+    /// The parser stores those coordinates unchanged and tells us – through the
+    /// `absolute_row` / `absolute_column` flags – whether they are absolute or
+    /// relative.  
+    /// If we push those raw numbers into the counting loop we will read from the
+    /// wrong cells (or fall off the sheet).  
+    /// Therefore each coordinate is converted to an absolute one *before* it is
+    /// added to the `ranges` vector.
     pub(crate) fn fn_countifs(&mut self, args: &[Node], cell: CellReferenceIndex) -> CalcResult {
         let args_count = args.len();
         if args_count < 2 || args_count % 2 == 1 {
@@ -357,57 +370,76 @@ impl Model {
         let case_count = args_count / 2;
 
         // ---------- collect criteria & build per-range matchers ----------
-        let mut criteria: Vec<CalcResult> = Vec::new();
-        let mut fn_criteria: Vec<Box<dyn Fn(&CalcResult) -> bool>> = Vec::new();
-        let mut ranges: Vec<Range> = Vec::new();
+        let mut criteria: Vec<CalcResult> = Vec::with_capacity(case_count);
+        let mut fn_criteria: Vec<Box<dyn Fn(&CalcResult) -> bool>> = Vec::with_capacity(case_count);
+        let mut ranges: Vec<Range> = Vec::with_capacity(case_count);
+
+        // helper: turn “relative (or absolute) coord” into absolute coord
+        let abs = |coord: i32, is_abs: bool, base: i32| -> i32 {
+            if is_abs {
+                coord
+            } else {
+                base + coord
+            }
+        };
 
         for case_idx in 0..case_count {
-            /* ---------- criterion (right-side argument) ---------- */
+            // ---------- right-hand side: criterion -----------------------
             let crit = self.evaluate_node_in_context(&args[case_idx * 2 + 1], cell);
             criteria.push(crit);
 
-            /* ---------- range (left-side argument) --------------- */
+            // ---------- left-hand side: range ----------------------------
             let range_node = &args[case_idx * 2];
 
-            // Bubble-up any error coming from the reference itself
+            // bubble up any error that comes from resolving the reference itself
             let range_value = self.evaluate_node_in_context(range_node, cell);
             if range_value.is_error() {
                 return range_value;
             }
 
             match range_node {
-                // A) Proper A1:B10-style range -------------------------------
+                // A) Proper A1:B10 style range -----------------------------
                 Node::RangeKind {
                     sheet_index,
+                    absolute_row1,
+                    absolute_column1,
                     row1,
                     column1,
+                    absolute_row2,
+                    absolute_column2,
                     row2,
                     column2,
                     ..
-                } => ranges.push(Range {
-                    left: CellReferenceIndex {
+                } => {
+                    let left_idx = CellReferenceIndex {
                         sheet: *sheet_index,
-                        row: *row1,
-                        column: *column1,
-                    },
-                    right: CellReferenceIndex {
+                        row: abs(*row1, *absolute_row1, cell.row),
+                        column: abs(*column1, *absolute_column1, cell.column),
+                    };
+                    let right_idx = CellReferenceIndex {
                         sheet: *sheet_index,
-                        row: *row2,
-                        column: *column2,
-                    },
-                }),
+                        row: abs(*row2, *absolute_row2, cell.row),
+                        column: abs(*column2, *absolute_column2, cell.column),
+                    };
+                    ranges.push(Range {
+                        left: left_idx,
+                        right: right_idx,
+                    });
+                }
 
-                // B) Single-cell reference – treat as 1 × 1 range ------------
+                // B) Single-cell reference – treated as 1 × 1 range --------
                 Node::ReferenceKind {
                     sheet_index,
+                    absolute_row,
+                    absolute_column,
                     row,
                     column,
                     ..
                 } => {
                     let idx = CellReferenceIndex {
                         sheet: *sheet_index,
-                        row: *row,
-                        column: *column,
+                        row: abs(*row, *absolute_row, cell.row),
+                        column: abs(*column, *absolute_column, cell.column),
                     };
                     ranges.push(Range {
                         left: idx,
@@ -415,24 +447,23 @@ impl Model {
                     });
                 }
 
-                // C) Anything else is a VALUE error --------------------------
+                // C) Anything else → VALUE! error --------------------------
                 _ => {
                     return CalcResult::new_error(
                         Error::VALUE,
                         cell,
                         "Expected a range".to_string(),
-                    );
+                    )
                 }
             }
         }
 
-        /* build_criteria is your existing helper that turns the literal or
-        regex the user passed (“>10”, “foo*”, etc.) into a closure          */
+        // build one closure per criterion
         for crit in &criteria {
             fn_criteria.push(build_criteria(crit));
         }
 
-        // ---------- original counting logic (unchanged) ----------
+        // ---------- counting loop (unchanged) ----------------------------
         let mut total = 0.0;
         let first = &ranges[0];
         let left_row = first.left.row;

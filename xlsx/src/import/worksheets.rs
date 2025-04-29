@@ -545,7 +545,8 @@ fn load_sheet_rels<R: Read + std::io::Seek>(
     for rel in rels {
         // Attempt to get the Type attribute
         match get_attribute(&rel, "Type") {
-            Ok(t) => { // Attribute found
+            Ok(t) => {
+                // Attribute found
                 if t.ends_with("comments") {
                     let mut target = get_attribute(&rel, "Target")?.to_string();
                     // Target="../comments1.xlsx"
@@ -570,15 +571,19 @@ fn load_sheet_rels<R: Read + std::io::Seek>(
             Err(XlsxError::Xml(error)) => {
                 // Type attribute is missing, log a warning and skip this relationship
                 // Consider replacing println! with a proper logging mechanism if available
-                println!("Warning: Relationship node in '{}' {} Skipping this relationship.", path, error);
+                println!(
+                    "Warning: Relationship node in '{}' {} Skipping this relationship.",
+                    path, error
+                );
                 // Optionally inspect other attributes like 'Target' to provide more context in the warning.
                 if let Ok(target) = get_attribute(&rel, "Target") {
-                     println!("  Target was: {}", target);
+                    println!("  Target was: {}", target);
                 }
                 // Skip processing this relationship and continue with the next one
                 continue;
             }
-            Err(e) => { // Some other error occurred while getting the attribute
+            Err(e) => {
+                // Some other error occurred while getting the attribute
                 // Propagate the error
                 return Err(e);
             }

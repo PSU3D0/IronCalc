@@ -64,10 +64,26 @@ impl Model {
     }
 
     pub(crate) fn fn_max(&mut self, args: &[Node], cell: CellReferenceIndex) -> CalcResult {
-        let mut result = f64::NAN;
+        // Initialize result to negative infinity.
+        // This ensures any valid number or boolean (0 or 1) will be greater.
+        let mut result = -f64::INFINITY;
+        // Track if we've found at least one value to compare.
+        // MAX() with no numeric/boolean arguments returns 0.
+        let mut found_value = false;
+
         for arg in args {
             match self.evaluate_node_in_context(arg, cell) {
-                CalcResult::Number(value) => result = value.max(result),
+                CalcResult::Number(value) => {
+                    // Standard number comparison
+                    result = value.max(result);
+                    found_value = true;
+                }
+                CalcResult::Boolean(b) => {
+                    // Coerce boolean to number (TRUE=1, FALSE=0)
+                    let value: f64 = if b { 1.0 } else { 0.0 };
+                    result = value.max(result);
+                    found_value = true;
+                }
                 CalcResult::Range { left, right } => {
                     if left.sheet != right.sheet {
                         return CalcResult::new_error(
@@ -76,6 +92,7 @@ impl Model {
                             "Ranges are in different sheets".to_string(),
                         );
                     }
+                    // TODO: Handle potential optimizations for full column/row refs if needed
                     for row in left.row..(right.row + 1) {
                         for column in left.column..(right.column + 1) {
                             match self.evaluate_cell(CellReferenceIndex {
@@ -85,10 +102,46 @@ impl Model {
                             }) {
                                 CalcResult::Number(value) => {
                                     result = value.max(result);
+                                    found_value = true;
+                                }
+                                CalcResult::Boolean(b) => {
+                                    // Also coerce booleans within ranges
+                                    let value: f64 = if b { 1.0 } else { 0.0 };
+                                    result = value.max(result);
+                                    found_value = true;
                                 }
                                 error @ CalcResult::Error { .. } => return error,
                                 _ => {
-                                    // We ignore booleans and strings
+                                    // Ignore strings, empty cells within ranges
+                                }
+                            }
+                        }
+                    }
+                }
+                CalcResult::Array(array) => {
+                    // Handle arrays similarly to ranges
+                    for row_vec in array {
+                        for node in row_vec {
+                            match node {
+                                // Assuming ArrayNode is similar to CalcResult for relevant types
+                                ArrayNode::Number(value) => {
+                                    result = value.max(result);
+                                    found_value = true;
+                                }
+                                ArrayNode::Boolean(b) => {
+                                    let value: f64 = if b { 1.0 } else { 0.0 };
+                                    result = value.max(result);
+                                    found_value = true;
+                                }
+                                ArrayNode::Error(e) => {
+                                    return CalcResult::Error {
+                                        error: e,
+                                        origin: cell,
+                                        message: "Error in array argument".to_string(),
+                                    }
+                                }
+                                _ => {
+                                    // Ignore strings, empty in arrays
                                 }
                             }
                         }
@@ -96,13 +149,25 @@ impl Model {
                 }
                 error @ CalcResult::Error { .. } => return error,
                 _ => {
-                    // We ignore booleans and strings
+                    // Ignore direct String, EmptyCell, EmptyArg arguments for MAX
                 }
             };
         }
-        if result.is_nan() || result.is_infinite() {
+
+        // If no numbers or booleans were found, MAX returns 0.
+        if !found_value {
             return CalcResult::Number(0.0);
         }
+
+        // Return the maximum value found.
+        // The check for is_infinite() might still be relevant if the input contained infinity.
+        // The check for is_nan() is unlikely now unless the input contained NaN.
+        if result.is_infinite() {
+            // Decide how to handle infinities if they are valid inputs,
+            // otherwise this check might not be strictly needed if inputs are validated elsewhere.
+            // Excel typically propagates infinities.
+        }
+
         CalcResult::Number(result)
     }
 

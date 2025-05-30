@@ -95,6 +95,7 @@ pub(crate) enum ParsedDefinedName {
 /// * A list of cells with its status (evaluating, evaluated, not evaluated)
 /// * A dictionary with the shared strings and their indices.
 ///   This is an optimization for large files (~1 million rows)
+#[derive(Clone)]
 pub struct Model {
     /// A Rust internal representation of an Excel workbook
     pub workbook: Workbook,
@@ -737,6 +738,7 @@ impl Model {
                 origin: cell_reference,
                 message: "Unevaluated formula".to_string(),
             },
+            InlineString { v, .. } => CalcResult::String(v.clone()),
             CellFormulaBoolean { v, .. } => CalcResult::Boolean(*v),
             CellFormulaNumber { v, .. } => CalcResult::Number(*v),
             CellFormulaString { v, .. } => CalcResult::String(v.clone()),

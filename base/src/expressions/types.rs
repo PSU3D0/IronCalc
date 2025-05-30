@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 // $A$34
@@ -39,6 +41,16 @@ pub struct CellReferenceIndex {
     pub sheet: u32,
     pub column: i32,
     pub row: i32,
+}
+
+impl Display for CellReferenceIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Sheet:'{}',Row:{},Col:{}",
+            self.sheet, self.row, self.column
+        )
+    }
 }
 
 #[derive(Serialize, Deserialize)]

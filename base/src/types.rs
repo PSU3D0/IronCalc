@@ -179,6 +179,10 @@ pub enum Cell {
         ei: Error,
         s: i32,
     },
+    InlineString {
+        v: String,
+        s: i32,
+    },
     // Always a shared string
     SharedString {
         si: i32,

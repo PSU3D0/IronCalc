@@ -1,23 +1,20 @@
 use chrono::{NaiveDate, NaiveDateTime};
-#[cfg(feature = "polars")]
-use polars::PyDataFrame;
 use pyo3::exceptions::PyException;
 use pyo3::types::PyList;
 use pyo3::IntoPyObjectExt;
 use pyo3::{create_exception, prelude::*, wrap_pyfunction};
 
-use types::{PySheetProperty, PyStyle, RangeInjectionManifestItem};
+use types::{PySheetProperty, PyStyle};
 use xlsx::base::calc_result::CalcResult;
 use xlsx::base::expressions::parser::ArrayNode;
 use xlsx::base::expressions::types::CellReferenceIndex;
+use xlsx::base::formatter::dates::from_excel_date;
 use xlsx::base::types::Style;
 use xlsx::base::Model;
 
 use xlsx::export::{save_to_icalc, save_to_xlsx};
 use xlsx::import;
 
-#[cfg(feature = "polars")]
-mod polars;
 mod types;
 use crate::types::PyCellType;
 
@@ -44,6 +41,12 @@ impl PyModel {
     /// Evaluates the workbook
     pub fn evaluate(&mut self) {
         self.model.evaluate()
+    }
+
+    pub fn clone(&self) -> PyResult<PyModel> {
+        Ok(PyModel {
+            model: self.model.clone(),
+        })
     }
 
     // Set values
@@ -238,6 +241,36 @@ impl PyModel {
         })
     }
 
+    pub fn evaluate_cell(
+        &mut self,
+        py: Python,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> PyResult<PyObject> {
+        let cell_reference = CellReferenceIndex { sheet, row, column };
+        let cell_style = self
+            .model
+            .get_style_for_cell(sheet, row, column)
+            .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+
+        let result: CalcResult = self.model.evaluate_cell(cell_reference);
+        calc_result_to_py_any(result, py, &cell_style)
+    }
+
+    pub fn evaluate_cells(
+        &mut self,
+        py: Python,
+        cells: Vec<(u32, i32, i32)>,
+    ) -> PyResult<Vec<PyObject>> {
+        let mut results = Vec::new();
+        for (sheet, row, column) in cells {
+            let result = self.evaluate_cell(py, sheet, row, column)?;
+            results.push(result);
+        }
+        Ok(results)
+    }
+
     /// Get raw value
     pub fn get_cell_content(&self, sheet: u32, row: i32, column: i32) -> PyResult<String> {
         self.model
@@ -282,33 +315,6 @@ impl PyModel {
             .map_err(|e| WorkbookError::new_err(e.to_string()))?;
         Ok(style.into())
     }
-
-    pub fn evaluate_cell(
-        &mut self,
-        py: Python,
-        sheet: u32,
-        row: i32,
-        column: i32,
-    ) -> PyResult<PyObject> {
-        let cell_reference = CellReferenceIndex { sheet, row, column };
-
-        let result: CalcResult = self.model.evaluate_cell(cell_reference);
-        calc_result_to_py_any(result, py)
-    }
-
-    pub fn evaluate_cells(
-        &mut self,
-        py: Python,
-        cells: Vec<(u32, i32, i32)>,
-    ) -> PyResult<Vec<PyObject>> {
-        let mut results = Vec::new();
-        for (sheet, row, column) in cells {
-            let result = self.evaluate_cell(py, sheet, row, column)?;
-            results.push(result);
-        }
-        Ok(results)
-    }
-
     // column widths, row heights
     // insert/delete rows/columns
 
@@ -442,12 +448,30 @@ impl PyModel {
     }
 }
 
-fn calc_result_to_py_any(result: CalcResult, py: Python) -> PyResult<PyObject> {
+fn calc_result_to_py_any(result: CalcResult, py: Python, cell_style: &Style) -> PyResult<PyObject> {
     match result {
         CalcResult::String(s) => s.into_py_any(py),
-        CalcResult::Number(n) => n.into_py_any(py),
+        CalcResult::Number(n) => {
+            // If we're date format, we need to convert to a date
+            if cell_style.num_fmt == "mm-dd-yy" {
+                if n < 1.0 {
+                    Ok(py.None())
+                } else {
+                    let date = from_excel_date(n as i64)
+                        .map_err(|e| WorkbookError::new_err(e.to_string()))?;
+                    date.into_py_any(py)
+                }
+            } else {
+                n.into_py_any(py)
+            }
+        }
         CalcResult::Boolean(b) => b.into_py_any(py),
-        CalcResult::Error { error, message, .. } => (error.to_string(), message).into_py_any(py),
+        CalcResult::Error {
+            error,
+            origin,
+            message,
+            ..
+        } => (error.to_string(), origin.to_string(), message).into_py_any(py),
         CalcResult::Range { left, right } => (
             (left.sheet, left.row, left.column),
             (right.sheet, right.row, right.column),

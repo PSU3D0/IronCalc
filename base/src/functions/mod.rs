@@ -249,6 +249,9 @@ pub enum Function {
     Gestep,
     Subtotal,
     Mod,
+    Ceiling,
+    Floor,
+    Int,
 }
 
 impl Function {
@@ -720,6 +723,9 @@ impl Function {
 
             "SUBTOTAL" => Some(Function::Subtotal),
             "MOD" => Some(Function::Mod),
+            "CEILING" => Some(Function::Ceiling),
+            "FLOOR" => Some(Function::Floor),
+            "INT" => Some(Function::Int),
             "DATEDIF" => Some(Function::Datedif),
             _ => None,
         }
@@ -924,7 +930,9 @@ impl fmt::Display for Function {
             Function::Convert => write!(f, "CONVERT"),
             Function::Delta => write!(f, "DELTA"),
             Function::Gestep => write!(f, "GESTEP"),
-
+            Function::Ceiling => write!(f, "CEILING"),
+            Function::Floor => write!(f, "FLOOR"),
+            Function::Int => write!(f, "INT"),
             Function::Subtotal => write!(f, "SUBTOTAL"),
             Function::Mod => write!(f, "MOD"),
             Function::Datedif => write!(f, "DATEDIF"),
@@ -1166,7 +1174,9 @@ impl Model {
             Function::Convert => self.fn_convert(args, cell),
             Function::Delta => self.fn_delta(args, cell),
             Function::Gestep => self.fn_gestep(args, cell),
-
+            Function::Ceiling => self.fn_ceiling(args, cell),
+            Function::Floor => self.fn_floor(args, cell),
+            Function::Int => self.fn_int(args, cell),
             Function::Subtotal => self.fn_subtotal(args, cell),
             Function::Mod => self.fn_mod(args, cell),
             Function::Datedif => self.fn_datedif(args, cell),

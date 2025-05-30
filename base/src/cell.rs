@@ -84,6 +84,7 @@ impl Cell {
             Cell::NumberCell { s, .. } => *s = style,
             Cell::ErrorCell { s, .. } => *s = style,
             Cell::SharedString { s, .. } => *s = style,
+            Cell::InlineString { s, .. } => *s = style,
             Cell::CellFormula { s, .. } => *s = style,
             Cell::CellFormulaBoolean { s, .. } => *s = style,
             Cell::CellFormulaNumber { s, .. } => *s = style,
@@ -99,6 +100,7 @@ impl Cell {
             Cell::NumberCell { s, .. } => *s,
             Cell::ErrorCell { s, .. } => *s,
             Cell::SharedString { s, .. } => *s,
+            Cell::InlineString { s, .. } => *s,
             Cell::CellFormula { s, .. } => *s,
             Cell::CellFormulaBoolean { s, .. } => *s,
             Cell::CellFormulaNumber { s, .. } => *s,
@@ -114,6 +116,7 @@ impl Cell {
             Cell::NumberCell { .. } => CellType::Number,
             Cell::ErrorCell { .. } => CellType::ErrorValue,
             Cell::SharedString { .. } => CellType::Text,
+            Cell::InlineString { .. } => CellType::Text,
             Cell::CellFormula { .. } => CellType::Number,
             Cell::CellFormulaBoolean { .. } => CellType::LogicalValue,
             Cell::CellFormulaNumber { .. } => CellType::Number,
@@ -148,6 +151,7 @@ impl Cell {
                 };
                 CellValue::String(v)
             }
+            Cell::InlineString { v, .. } => CellValue::String(v.clone()),
             Cell::CellFormula { .. } => CellValue::String("#ERROR!".to_string()),
             Cell::CellFormulaBoolean { v, .. } => CellValue::Boolean(*v),
             Cell::CellFormulaNumber { v, .. } => CellValue::Number(*v),

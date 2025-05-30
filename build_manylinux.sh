@@ -95,7 +95,7 @@ docker run --rm \
         cd '${CONTAINER_MATURIN_PATH}' && # Switched to single quotes just in case path had odd chars
         echo 'Current directory: \$(pwd)' &&
         echo 'Building with Maturin (output to ${RELATIVE_OUT_PATH})...' &&
-        ${PYTHON_INTERPRETER_PATH} -m maturin build --release --out '${RELATIVE_OUT_PATH}' && # Switched to single quotes
+        /opt/python/cp312-cp312/bin/maturin build --release --out '${RELATIVE_OUT_PATH}' --find-interpreter && # Switched to single quotes
         echo 'Build finished inside container.' &&
         echo '------------------------'
     "

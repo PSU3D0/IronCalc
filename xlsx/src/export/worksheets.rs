@@ -139,6 +139,13 @@ pub(crate) fn get_worksheet_xml(
                         "<c r=\"{cell_name}\" t=\"s\"{style}><v>{si}</v></c>"
                     ));
                 }
+                Cell::InlineString { v, s } => {
+                    let style = get_cell_style_attribute(*s);
+                    let escaped_v = escape_xml(v);
+                    row_data_str.push(format!(
+                        "<c r=\"{cell_name}\" t=\"str\"{style}><v>{escaped_v}</v></c>"
+                    ));
+                }
                 Cell::CellFormula { f: _, s: _ } => {
                     panic!("Model needs to be evaluated before saving!");
                 }

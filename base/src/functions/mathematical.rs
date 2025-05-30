@@ -567,6 +567,77 @@ impl Model {
         CalcResult::Number((x + random() * (y - x)).floor())
     }
 
+    pub(crate) fn fn_ceiling(&mut self, args: &[Node], cell: CellReferenceIndex) -> CalcResult {
+        if args.len() != 2 {
+            return CalcResult::new_args_number_error(cell);
+        }
+        let number = match self.get_number(&args[0], cell) {
+            Ok(f) => f,
+            Err(s) => return s,
+        };
+        let significance = match self.get_number(&args[1], cell) {
+            Ok(f) => f,
+            Err(s) => return s,
+        };
+        if significance == 0.0 {
+            return CalcResult::new_error(
+                Error::NUM,
+                cell,
+                "Significance can't be zero".to_string(),
+            );
+        }
+        if significance < 0.0 {
+            return CalcResult::new_error(
+                Error::NUM,
+                cell,
+                "Significance can't be negative".to_string(),
+            );
+        }
+        let result = number.ceil() / significance;
+        CalcResult::Number(result * significance)
+    }
+
+    pub(crate) fn fn_floor(&mut self, args: &[Node], cell: CellReferenceIndex) -> CalcResult {
+        if args.len() != 2 {
+            return CalcResult::new_args_number_error(cell);
+        }
+        let number = match self.get_number(&args[0], cell) {
+            Ok(f) => f,
+            Err(s) => return s,
+        };
+        let significance = match self.get_number(&args[1], cell) {
+            Ok(f) => f,
+            Err(s) => return s,
+        };
+        if significance == 0.0 {
+            return CalcResult::new_error(
+                Error::NUM,
+                cell,
+                "Significance can't be zero".to_string(),
+            );
+        }
+        if significance < 0.0 {
+            return CalcResult::new_error(
+                Error::NUM,
+                cell,
+                "Significance can't be negative".to_string(),
+            );
+        }
+        let result = number.ceil() / significance;
+        CalcResult::Number(result * significance)
+    }
+
+    pub(crate) fn fn_int(&mut self, args: &[Node], cell: CellReferenceIndex) -> CalcResult {
+        if args.len() != 1 {
+            return CalcResult::new_args_number_error(cell);
+        }
+        let number = match self.get_number(&args[0], cell) {
+            Ok(f) => f,
+            Err(s) => return s,
+        };
+        CalcResult::Number(number.floor())
+    }
+
     pub(crate) fn fn_mod(&mut self, args: &[Node], cell: CellReferenceIndex) -> CalcResult {
         if args.len() != 2 {
             return CalcResult::new_args_number_error(cell);

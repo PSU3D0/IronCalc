@@ -399,8 +399,8 @@ fn get_cell_from_excel(
             "inlineStr" => {
                 // Not implemented
                 println!("Invalid type (inlineStr) in {}!{}", sheet_name, cell_ref);
-                Cell::ErrorCell {
-                    ei: Error::NIMPL,
+                Cell::InlineString {
+                    v: cell_value.unwrap_or("").to_string(),
                     s: cell_style,
                 }
             }

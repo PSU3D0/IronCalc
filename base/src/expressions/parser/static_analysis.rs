@@ -610,6 +610,8 @@ fn get_function_args_signature(kind: &Function, arg_count: usize) -> Vec<Signatu
         Function::Max => vec![Signature::Vector; arg_count],
         Function::Min => vec![Signature::Vector; arg_count],
         Function::Pi => args_signature_no_args(arg_count),
+        Function::Floor => args_signature_scalars(arg_count, 2, 0),
+        Function::Int => args_signature_scalars(arg_count, 1, 0),
         Function::Mod => args_signature_scalars(arg_count, 2, 0),
         Function::Power => args_signature_scalars(arg_count, 2, 0),
         Function::Product => vec![Signature::Vector; arg_count],
@@ -780,6 +782,7 @@ fn get_function_args_signature(kind: &Function, arg_count: usize) -> Vec<Signatu
         Function::Formulatext => args_signature_scalars(arg_count, 1, 0),
         Function::Unicode => args_signature_scalars(arg_count, 1, 0),
         Function::Geomean => vec![Signature::Vector; arg_count],
+        Function::Ceiling => args_signature_scalars(arg_count, 2, 0),
     }
 }
 
@@ -810,6 +813,9 @@ fn static_analysis_on_function(kind: &Function, args: &[Node]) -> StaticResult {
         Function::Columns => not_implemented(args),
         Function::Cos => scalar_arguments(args),
         Function::Cosh => scalar_arguments(args),
+        Function::Ceiling => scalar_arguments(args),
+        Function::Floor => scalar_arguments(args),
+        Function::Int => scalar_arguments(args),
         Function::Mod => StaticResult::Scalar,
         Function::Max => StaticResult::Scalar,
         Function::Min => StaticResult::Scalar,

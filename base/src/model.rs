@@ -14,6 +14,7 @@ use crate::{
             stringify::{rename_defined_name_in_node, to_rc_format, to_string},
             Node, Parser,
         },
+        pattern_matching::{PatternKey, SubstitutionRegistry},
         token::{get_error_by_name, Error, OpCompare, OpProduct, OpSum, OpUnary},
         types::*,
         utils::{self, is_valid_column_number, is_valid_identifier, is_valid_row},
@@ -117,6 +118,8 @@ pub struct Model {
     pub(crate) tz: Tz,
     /// The view id. A view consist of a selected sheet and ranges.
     pub(crate) view_id: u32,
+    /// Substitution registry for scalar range-substitution
+    pub(crate) substitution_registry: SubstitutionRegistry,
 }
 
 // FIXME: Maybe this should be the same as CellReference
@@ -374,7 +377,13 @@ impl Model {
             OpPowerKind { left, right } => {
                 self.handle_arithmetic(left, right, cell, &|f1, f2| Ok(f1.powf(f2)))
             }
-            FunctionKind { kind, args } => self.evaluate_function(kind, args, cell),
+            FunctionKind { kind, args } => {
+                // Check for substitution pattern match before evaluating function
+                if let Some(substitution_result) = self.check_node_for_substitution(node, cell) {
+                    return substitution_result;
+                }
+                self.evaluate_function(kind, args, cell)
+            }
             InvalidFunctionKind { name, args: _ } => {
                 CalcResult::new_error(Error::ERROR, cell, format!("Invalid function: {}", name))
             }
@@ -926,6 +935,7 @@ impl Model {
             locale,
             tz,
             view_id: 0,
+            substitution_registry: SubstitutionRegistry::new(),
         };
 
         model.parse_formulas();
@@ -2263,6 +2273,74 @@ impl Model {
     /// Deletes the style of a row if there is any
     pub fn delete_row_style(&mut self, sheet: u32, row: i32) -> Result<(), String> {
         self.workbook.worksheet_mut(sheet)?.delete_row_style(row)
+    }
+
+    /// Adds a substitution for pattern matching during evaluation
+    pub fn add_substitution(&mut self, pattern: PatternKey, value: f64) {
+        self.substitution_registry.add_substitution(pattern, value);
+    }
+
+    /// Removes a substitution pattern
+    pub fn remove_substitution(&mut self, pattern: &PatternKey) -> bool {
+        self.substitution_registry
+            .remove_substitution(pattern)
+            .is_some()
+    }
+
+    /// Checks if a substitution exists for the given pattern
+    pub fn has_substitution(&mut self, pattern: &PatternKey) -> bool {
+        self.substitution_registry
+            .get_substitution(pattern)
+            .is_some()
+    }
+
+    /// Gets the substitution value for a pattern, if it exists
+    pub fn get_substitution_value(&mut self, pattern: &PatternKey) -> Option<f64> {
+        self.substitution_registry
+            .get_substitution(pattern)
+            .copied()
+    }
+
+    /// Activates or deactivates the substitution registry
+    pub fn set_substitutions_active(&mut self, active: bool) {
+        self.substitution_registry.set_active(active);
+    }
+
+    /// Returns whether the substitution registry is active
+    pub fn are_substitutions_active(&self) -> bool {
+        self.substitution_registry.is_active()
+    }
+
+    /// Clears all substitutions from the registry
+    pub fn clear_substitutions(&mut self) {
+        self.substitution_registry.clear();
+    }
+
+    /// Gets statistics about the substitution registry
+    pub fn get_substitution_stats(&self) -> crate::expressions::pattern_matching::RegistryStats {
+        self.substitution_registry.stats().clone()
+    }
+
+    /// Checks if a node matches a substitution pattern and returns the substituted value
+    fn check_node_for_substitution(
+        &mut self,
+        node: &Node,
+        cell: CellReferenceIndex,
+    ) -> Option<CalcResult> {
+        // Only check for substitutions if the registry is active
+        if !self.substitution_registry.is_active() {
+            return None;
+        }
+
+        // Try to extract a pattern from the node using the current cell context
+        if let Some(pattern) = PatternKey::from_node_with_context(node, cell) {
+            // Check if we have a substitution for this pattern
+            if let Some(value) = self.substitution_registry.get_substitution(&pattern) {
+                return Some(CalcResult::Number(*value));
+            }
+        }
+
+        None
     }
 }
 

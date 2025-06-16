@@ -407,6 +407,8 @@ impl Model {
             language,
             tz,
             view_id: 0,
+            substitution_registry: crate::expressions::pattern_matching::SubstitutionRegistry::new(
+            ),
         };
         model.parse_formulas();
         Ok(model)

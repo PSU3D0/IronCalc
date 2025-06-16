@@ -462,6 +462,7 @@ dependencies = [
  "csv",
  "js-sys",
  "once_cell",
+ "ordered-float",
  "rand",
  "regex",
  "regex-lite",
@@ -642,6 +643,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
+name = "ordered-float"
+version = "4.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bb71e1b3fa6ca1c61f383464aaf2bb0e2f8e772a1f01d486832464de363b951"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "parse-zoneinfo"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -814,6 +824,7 @@ version = "0.5.0"
 dependencies = [
  "chrono",
  "ironcalc",
+ "ordered-float",
  "pyo3",
  "serde",
  "serde_json",

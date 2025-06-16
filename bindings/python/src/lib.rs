@@ -1,6 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use pyo3::exceptions::PyException;
-use pyo3::types::PyList;
+use pyo3::types::{PyDict, PyList};
 use pyo3::IntoPyObjectExt;
 use pyo3::{create_exception, prelude::*, wrap_pyfunction};
 
@@ -15,7 +15,10 @@ use xlsx::base::Model;
 use xlsx::export::{save_to_icalc, save_to_xlsx};
 use xlsx::import;
 
+mod pattern_matching;
 mod types;
+
+use crate::pattern_matching::PyPatternKey;
 use crate::types::PyCellType;
 
 create_exception!(_ironcalc, WorkbookError, PyException);
@@ -446,6 +449,66 @@ impl PyModel {
     pub fn test_panic(&self) -> PyResult<()> {
         panic!("This function panics for testing panic handling");
     }
+
+    // Pattern Matching Methods
+
+    /// Add a substitution pattern to the model
+    pub fn add_substitution(&mut self, pattern: &PyPatternKey, value: f64) {
+        self.model.add_substitution(pattern.clone().into(), value);
+    }
+
+    /// Check if the model has a specific substitution pattern
+    pub fn has_substitution(&mut self, pattern: &PyPatternKey) -> bool {
+        self.model.has_substitution(&pattern.clone().into())
+    }
+
+    /// Get a substitution value for a pattern
+    pub fn get_substitution(&mut self, pattern: &PyPatternKey) -> Option<f64> {
+        self.model.get_substitution_value(&pattern.clone().into())
+    }
+
+    /// Set the substitution registry active state
+    pub fn set_substitutions_active(&mut self, active: bool) {
+        self.model.set_substitutions_active(active);
+    }
+
+    /// Check if substitutions are active
+    pub fn substitutions_active(&self) -> bool {
+        self.model.are_substitutions_active()
+    }
+
+    /// Clear all substitutions
+    pub fn clear_substitutions(&mut self) {
+        self.model.clear_substitutions();
+    }
+
+    /// Get substitution registry statistics
+    pub fn get_substitution_stats(&self) -> Py<PyDict> {
+        let stats = self.model.get_substitution_stats();
+        Python::with_gil(|py| {
+            let dict = PyDict::new(py);
+            dict.set_item("total_lookups", stats.total_lookups())
+                .unwrap();
+            dict.set_item("successful_lookups", stats.successful_lookups)
+                .unwrap();
+            dict.set_item("failed_lookups", stats.failed_lookups)
+                .unwrap();
+            dict.set_item("inactive_lookups", stats.inactive_lookups)
+                .unwrap();
+            dict.set_item("success_rate", stats.success_rate()).unwrap();
+            dict.into()
+        })
+    }
+
+    /// Add multiple substitutions at once
+    pub fn add_substitutions_bulk(&mut self, patterns: Vec<(PyPatternKey, f64)>) -> usize {
+        let mut count = 0;
+        for (py_pattern, value) in patterns {
+            self.model.add_substitution(py_pattern.into(), value);
+            count += 1;
+        }
+        count
+    }
 }
 
 fn calc_result_to_py_any(result: CalcResult, py: Python, cell_style: &Style) -> PyResult<PyObject> {
@@ -551,6 +614,7 @@ fn naivedatetime_to_excel_timestamp(dt: NaiveDateTime) -> f64 {
 
 /// Loads a function from an xlsx file
 #[pyfunction]
+#[pyo3(signature = (file_path, locale = "en_US", tz = "UTC"))]
 pub fn load_from_xlsx(file_path: &str, locale: &str, tz: &str) -> PyResult<PyModel> {
     let model = import::load_from_xlsx(file_path, locale, tz)
         .map_err(|e| WorkbookError::new_err(e.to_string()))?;
@@ -567,6 +631,7 @@ pub fn load_from_icalc(file_name: &str) -> PyResult<PyModel> {
 
 /// Creates an empty model
 #[pyfunction]
+#[pyo3(signature = (name, locale = "en_US", tz = "UTC"))]
 pub fn create(name: &str, locale: &str, tz: &str) -> PyResult<PyModel> {
     let model =
         Model::new_empty(name, locale, tz).map_err(|e| WorkbookError::new_err(e.to_string()))?;
@@ -589,6 +654,19 @@ fn ironcalc(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(load_from_xlsx, m)?)?;
     m.add_function(wrap_pyfunction!(load_from_icalc, m)?)?;
     m.add_function(wrap_pyfunction!(test_panic, m)?)?;
+
+    // Add pattern matching classes
+    m.add_class::<pattern_matching::PyPatternKey>()?;
+    m.add_class::<pattern_matching::PySubstitutionRegistry>()?;
+    m.add_class::<pattern_matching::PyCriteriaValue>()?;
+    m.add_class::<pattern_matching::PyCriteriaPair>()?;
+    m.add_class::<pattern_matching::PyLookupValue>()?;
+    m.add_class::<pattern_matching::PyTableRange>()?;
+    m.add_class::<pattern_matching::PySumifsBuilder>()?;
+    m.add_class::<pattern_matching::PyCountifsBuilder>()?;
+    m.add_class::<pattern_matching::PyAverageifsBuilder>()?;
+    m.add_class::<pattern_matching::PyVlookupBuilder>()?;
+    m.add_class::<pattern_matching::PyPatternError>()?;
 
     Ok(())
 }

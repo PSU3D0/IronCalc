@@ -944,6 +944,12 @@ impl Model {
         Ok(model)
     }
 
+    /// Clears the evaluation cache. This is useful when you want to clear the cache without re-parsing the formulas.
+    pub fn clear_evaluation_cache(&mut self) {
+        self.cells.clear();
+    }
+
+
     /// Parses a reference like "Sheet1!B4" into {0, 2, 4}
     ///
     /// # Examples
@@ -1799,8 +1805,7 @@ impl Model {
 
     /// Evaluates the model with a top-down recursive algorithm
     pub fn evaluate(&mut self) {
-        // clear all computation artifacts
-        self.cells.clear();
+        self.clear_evaluation_cache();
 
         let cells = self.get_all_cells();
 

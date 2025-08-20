@@ -181,7 +181,9 @@ jobs:
         node:
           - '18'
           - '20'
-    runs-on: ubuntu-latest
+    runs-on: k8s
+    container:
+      image: ubuntu
     defaults:
       run:
         working-directory: ./bindings/nodejs
@@ -215,7 +217,9 @@ jobs:
         node:
           - '18'
           - '20'
-    runs-on: ubuntu-latest
+    runs-on: k8s
+    container:
+      image: ubuntu
     defaults:
       run:
         working-directory: ./bindings/nodejs
@@ -251,7 +255,9 @@ jobs:
         node:
           - '18'
           - '20'
-    runs-on: ubuntu-latest
+    runs-on: k8s
+    container:
+      image: ubuntu
     defaults:
       run:
         working-directory: ./bindings/nodejs
@@ -288,7 +294,9 @@ jobs:
     name: Test bindings on aarch64-unknown-linux-musl - node@${{ matrix.node }}
     needs:
       - build
-    runs-on: ubuntu-latest
+    runs-on: k8s
+    container:
+      image: ubuntu
     defaults:
       run:
         working-directory: ./bindings/nodejs
@@ -330,7 +338,9 @@ jobs:
         node:
           - '18'
           - '20'
-    runs-on: ubuntu-latest
+    runs-on: k8s
+    container:
+      image: ubuntu
     defaults:
       run:
         working-directory: ./bindings/nodejs
@@ -400,7 +410,9 @@ jobs:
           if-no-files-found: error
   publish:
     name: Publish
-    runs-on: ubuntu-latest
+    runs-on: k8s
+    container:
+      image: ubuntu
     defaults:
       run:
         working-directory: ./bindings/nodejs

@@ -5,7 +5,9 @@ on:
 
 jobs:
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: k8s
+    container:
+      image: ubuntu
     env:
       CARGO_TERM_COLOR: always
     steps:

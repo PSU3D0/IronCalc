@@ -7,6 +7,8 @@ jobs:
   coverage:
     runs-on: k8s
     container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
+    container:
       image: ubuntu
     env:
       CARGO_TERM_COLOR: always

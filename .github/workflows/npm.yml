@@ -183,6 +183,8 @@ jobs:
           - '20'
     runs-on: k8s
     container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
+    container:
       image: ubuntu
     defaults:
       run:
@@ -218,6 +220,8 @@ jobs:
           - '18'
           - '20'
     runs-on: k8s
+    container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
     container:
       image: ubuntu
     defaults:
@@ -257,6 +261,8 @@ jobs:
           - '20'
     runs-on: k8s
     container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
+    container:
       image: ubuntu
     defaults:
       run:
@@ -295,6 +301,8 @@ jobs:
     needs:
       - build
     runs-on: k8s
+    container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
     container:
       image: ubuntu
     defaults:
@@ -339,6 +347,8 @@ jobs:
           - '18'
           - '20'
     runs-on: k8s
+    container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
     container:
       image: ubuntu
     defaults:
@@ -411,6 +421,8 @@ jobs:
   publish:
     name: Publish
     runs-on: k8s
+    container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
     container:
       image: ubuntu
     defaults:

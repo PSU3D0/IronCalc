@@ -16,6 +16,8 @@ jobs:
   linux:
     runs-on: k8s
     container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
+    container:
       image: ubuntu
     strategy:
       matrix:
@@ -89,6 +91,8 @@ jobs:
   sdist:
     runs-on: k8s
     container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
+    container:
       image: ubuntu
     steps:
       - uses: actions/checkout@v3
@@ -109,6 +113,8 @@ jobs:
     name: >-
         Publish Python 🐍 distribution 📦 to Test PyPI
     runs-on: k8s
+    container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
     container:
       image: ubuntu
     needs: [linux, windows, macos, sdist]
@@ -131,6 +137,8 @@ jobs:
     name: >-
         Publish Python 🐍 distribution 📦 to PyPI
     runs-on: k8s
+    container:
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
     container:
       image: ubuntu
     needs: [linux, windows, macos, sdist]
